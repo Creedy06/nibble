@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nibble: an 8-bit CPU in your browser</title>
+<meta name="description" content="Live demo of Nibble, an 8-bit CPU with a custom instruction set, emulator and assembler, built by Chauntee Reedy.">
+<style>
+  :root{
+    --bg:#0e1116; --panel:#151a21; --line:#252c36; --text:#d8dee6; --dim:#7d8896;
+    --amber:#ffb547; --green:#5ee08a; --red:#ff6b6b; --blue:#6cb6ff; --mono:"JetBrains Mono","SFMono-Regular",Consolas,Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+  a{color:var(--blue)}
+  header{padding:22px 24px 10px;max-width:1200px;margin:0 auto}
+  h1{margin:0;font:700 28px/1.2 var(--mono);letter-spacing:-.5px}
+  h1 span{color:var(--amber)}
+  .sub{color:var(--dim);margin:6px 0 0}
+  main{max-width:1200px;margin:0 auto;padding:10px 24px 40px;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:16px}
+  @media (max-width:880px){main{grid-template-columns:1fr}}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+  .panel h2{margin:0 0 10px;font:600 12px/1 var(--mono);text-transform:uppercase;letter-spacing:1.5px;color:var(--dim)}
+  .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+  select,button{font:600 13px var(--mono);background:#1d242e;color:var(--text);border:1px solid var(--line);border-radius:7px;padding:7px 12px;cursor:pointer}
+  button:hover,select:hover{border-color:#3a4554}
+  button.primary{background:var(--amber);color:#1a1205;border-color:var(--amber)}
+  button:disabled{opacity:.4;cursor:default}
+  .speed{display:flex;align-items:center;gap:6px;color:var(--dim);font:12px var(--mono)}
+  textarea{width:100%;height:360px;resize:vertical;background:#0b0e12;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font:13px/1.55 var(--mono);tab-size:8;outline:none;white-space:pre;overflow-wrap:normal;overflow-x:auto}
+  textarea:focus{border-color:#3a4554}
+  .msg{min-height:22px;margin-top:8px;font:13px var(--mono);color:var(--green)}
+  .msg.err{color:var(--red)}
+  .regs{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+  .reg{background:#0b0e12;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-family:var(--mono)}
+  .reg .name{color:var(--dim);font-size:12px}
+  .reg .val{font-size:22px;font-weight:700}
+  .reg .bits{font-size:12px;color:var(--dim);letter-spacing:2px}
+  .reg .bits b{color:var(--green);font-weight:600}
+  .reg.changed{border-color:var(--amber)}
+  .status{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-top:10px;font-family:var(--mono);font-size:13px}
+  .led{display:inline-flex;align-items:center;gap:6px;color:var(--dim)}
+  .led i{width:11px;height:11px;border-radius:50%;background:#2a313b;display:inline-block}
+  .led.on i{background:var(--amber);box-shadow:0 0 8px var(--amber)}
+  .led.on{color:var(--text)}
+  .now{margin-top:10px;font:600 14px var(--mono);color:var(--amber);min-height:20px}
+  .mem{display:grid;grid-template-columns:22px repeat(16,1fr);gap:2px;font:11px/1 var(--mono)}
+  .mem div{padding:5px 0;text-align:center;border-radius:3px;background:#0b0e12;color:#566170}
+  .mem .hd{background:none;color:var(--dim)}
+  .mem .nz{color:var(--text)}
+  .mem .pc{background:var(--amber);color:#1a1205;font-weight:700}
+  .mem .arg{background:#4a3a1c;color:var(--amber)}
+  .mem .w{background:var(--green);color:#06210f;font-weight:700}
+  .tape{font:600 15px var(--mono);color:var(--green);min-height:24px;word-break:break-word}
+  .legend{display:flex;gap:14px;margin-top:8px;color:var(--dim);font:11px var(--mono)}
+  .legend span::before{content:"";display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px;background:var(--c)}
+  .col{display:flex;flex-direction:column;gap:16px}
+  footer{max-width:1200px;margin:0 auto;padding:0 24px 30px;color:var(--dim);font-size:13px}
+  details{margin-top:6px} summary{cursor:pointer;color:var(--dim);font:12px var(--mono)}
+  table.isa{width:100%;border-collapse:collapse;font:12px var(--mono);margin-top:8px}
+  table.isa td{padding:3px 6px;border-top:1px solid var(--line)} table.isa td:first-child{color:var(--amber)}
+</style>
+</head>
+<body>
+<header>
+  <h1>nibble<span>_</span> an 8-bit CPU you can watch think</h1>
+  <p class="sub">My own 16-instruction CPU, assembler and emulator, running live in your browser. Pick a program, press <b>Step</b> or <b>Run</b>, and watch the registers, flags and memory change. · <a href="https://github.com/Creedy06/nibble">Source on GitHub</a></p>
+</header>
+<main>
+  <section class="col">
+    <div class="panel">
+      <h2>Program</h2>
+      <div class="bar">
+        <select id="prog" aria-label="Example program"></select>
+        <button class="primary" id="asm">Assemble</button>
+        <button id="step">Step</button>
+        <button id="run">Run</button>
+        <button id="reset">Reset</button>
+        <label class="speed">speed <input id="speed" type="range" min="1" max="60" value="12"></label>
+      </div>
+      <textarea id="src" spellcheck="false" aria-label="Assembly source"></textarea>
+      <div class="msg" id="msg"></div>
+      <details><summary>Instruction set</summary>
+        <table class="isa">
+          <tr><td>LDI rd, n</td><td>load constant</td><td>LD / ST rd, addr</td><td>memory</td></tr>
+          <tr><td>MOV rd, rs</td><td>copy</td><td>ADD / SUB rd, rs</td><td>math, sets Z C N</td></tr>
+          <tr><td>AND / OR / XOR</td><td>bitwise</td><td>SHL / SHR rd</td><td>shift into C</td></tr>
+          <tr><td>CMP rd, rs</td><td>flags only</td><td>JMP / JZ / JNZ / JC</td><td>jumps</td></tr>
+          <tr><td>LDR / STR rd, [rs]</td><td>pointers</td><td>OUT rd · HLT</td><td>output · stop</td></tr>
+        </table>
+      </details>
+    </div>
+  </section>
+  <section class="col">
+    <div class="panel">
+      <h2>CPU</h2>
+      <div class="regs" id="regs"></div>
+      <div class="status">
+        <span>PC <b id="pc">00</b></span>
+        <span class="led" id="fz"><i></i>Z zero</span>
+        <span class="led" id="fc"><i></i>C carry</span>
+        <span class="led" id="fn"><i></i>N negative</span>
+        <span>cycles <b id="cyc">0</b></span>
+      </div>
+      <div class="now" id="now">&nbsp;</div>
+    </div>
+    <div class="panel">
+      <h2>Output port</h2>
+      <div class="tape" id="out">&nbsp;</div>
+    </div>
+    <div class="panel">
+      <h2>Memory · 256 bytes</h2>
+      <div class="mem" id="mem"></div>
+      <div class="legend"><span style="--c:var(--amber)">next instruction</span><span style="--c:#4a3a1c">its operand</span><span style="--c:var(--green)">just written</span></div>
+    </div>
+  </section>
+</main>
+<footer>Built by <a href="https://github.com/Creedy06">Chauntee Reedy</a>, computer engineering at UAH. Each instruction's first byte is <code>[opcode:4][rd:2][rs:2]</code>; the 4-bit opcode is where the name comes from.</footer>
+<script>
+// Nibble core: assembler + CPU (JavaScript port of the Python package)
+const OPC = {HLT:0,LDI:1,LD:2,ST:3,MOV:4,ADD:5,SUB:6,AND:7,OR:8,XOR:9,SHL:10,SHR:10,CMP:11,JMP:12,JZ:12,JNZ:12,JC:12,LDR:13,STR:14,OUT:15};
+const JCOND = {JMP:0,JZ:1,JNZ:2,JC:3};
+const TWO = new Set([1,2,3,12]);
+const REGS = {R0:0,R1:1,R2:2,R3:3};
+const enc = (op,rd=0,rs=0) => (op<<4)|(rd<<2)|rs;
+
+class AsmError extends Error { constructor(line,msg){ super(`line ${line}: ${msg}`); this.line=line; } }
+
+function parseLines(src){
+  const out=[];
+  src.split('\n').forEach((raw,i)=>{
+    let line = raw.split(';')[0].trim(); const no=i+1;
+    while(line.includes(':')){ const k=line.indexOf(':'); out.push({no,kind:'label',word:line.slice(0,k).trim()}); line=line.slice(k+1).trim(); }
+    if(line){ const p=line.replace(/,/g,' ').split(/\s+/); out.push({no,kind:'stmt',word:p[0].toUpperCase(),args:p.slice(1)}); }
+  });
+  return out;
+}
+function num(tok,labels,no){
+  if(tok in labels) return labels[tok];
+  const t=tok.toLowerCase(); let v;
+  if(/^-?0x[0-9a-f]+$/.test(t)) v=parseInt(t,16);
+  else if(/^-?0b[01]+$/.test(t)) v=(t[0]==='-'?-1:1)*parseInt(t.replace('-','').slice(2),2);
+  else if(/^-?\d+$/.test(t)) v=parseInt(t,10);
+  else throw new AsmError(no,`unknown label or number '${tok}'`);
+  if(v<-128||v>255) throw new AsmError(no,`${tok} does not fit in 8 bits`);
+  return v&0xFF;
+}
+function reg(tok,no){ const r=REGS[tok.toUpperCase().replace(/[\[\]]/g,'')]; if(r===undefined) throw new AsmError(no,`expected a register R0-R3, got '${tok}'`); return r; }
+
+function assemble(src){
+  const lines=parseLines(src); const labels={}; let pc=0;
+  for(const L of lines){
+    if(L.kind==='label'){ if(L.word in labels) throw new AsmError(L.no,`label '${L.word}' defined twice`); labels[L.word]=pc; }
+    else if(L.word==='.ORG') pc=num(L.args[0],{},L.no);
+    else if(L.word==='.DB') pc+=L.args.length;
+    else if(L.word in OPC) pc+= TWO.has(OPC[L.word])?2:1;
+    else throw new AsmError(L.no,`unknown instruction '${L.word}'`);
+  }
+  const mem=new Uint8Array(256); const srcMap={}; let end=0; pc=0;
+  for(const L of lines){
+    if(L.kind==='label') continue;
+    if(L.word==='.ORG'){ pc=num(L.args[0],{},L.no); continue; }
+    let bytes;
+    if(L.word==='.DB') bytes=L.args.map(a=>num(a,labels,L.no));
+    else { bytes=encodeOne(L.word,L.args,labels,L.no); srcMap[pc]=L.no; }
+    if(pc+bytes.length>256) throw new AsmError(L.no,'program does not fit in 256 bytes');
+    bytes.forEach((b,i)=>mem[pc+i]=b); pc+=bytes.length; end=Math.max(end,pc);
+  }
+  return {bytes:mem.slice(0,end), srcMap, labels};
+}
+function encodeOne(m,a,labels,no){
+  const op=OPC[m]; const need=n=>{ if(a.length!==n) throw new AsmError(no,`${m} takes ${n} operand(s), got ${a.length}`); };
+  if(m==='HLT'){ need(0); return [enc(op)]; }
+  if(['LDI','LD','ST'].includes(m)){ need(2); return [enc(op,reg(a[0],no)), num(a[1],labels,no)]; }
+  if(['MOV','ADD','SUB','AND','OR','XOR','CMP','LDR','STR'].includes(m)){ need(2); return [enc(op,reg(a[0],no),reg(a[1],no))]; }
+  if(m==='SHL'||m==='SHR'){ need(1); return [enc(op,reg(a[0],no),m==='SHL'?0:1)]; }
+  if(m in JCOND){ need(1); return [enc(op,JCOND[m]), num(a[0],labels,no)]; }
+  if(m==='OUT'){ need(1); return [enc(op,reg(a[0],no))]; }
+}
+
+const NAMES=['HLT','LDI','LD','ST','MOV','ADD','SUB','AND','OR','XOR','SH','CMP','J','LDR','STR','OUT'];
+const JN=['JMP','JZ','JNZ','JC'];
+function disasmAt(mem,pc){
+  const b=mem[pc], op=b>>4, rd=(b>>2)&3, rs=b&3, arg=mem[(pc+1)&0xFF];
+  const h=v=>'0x'+v.toString(16).toUpperCase().padStart(2,'0');
+  switch(op){
+    case 0: return 'HLT'; case 1: return `LDI R${rd}, ${arg}`;
+    case 2: case 3: return `${NAMES[op]} R${rd}, ${h(arg)}`;
+    case 10: return `${rs===0?'SHL':'SHR'} R${rd}`;
+    case 12: return `${JN[rd]} ${h(arg)}`;
+    case 13: case 14: return `${NAMES[op]} R${rd}, [R${rs}]`;
+    case 15: return `OUT R${rd}`;
+    default: return `${NAMES[op]} R${rd}, R${rs}`;
+  }
+}
+
+class CPU {
+  constructor(bytes){ this.mem=new Uint8Array(256); this.mem.set(bytes); this.regs=[0,0,0,0]; this.pc=0; this.z=this.c=this.n=false; this.halted=false; this.cycles=0; this.output=[]; this.lastWrite=null; this.lastPC=0; }
+  flags(r,carry){ const v=r&0xFF; this.z=v===0; this.n=!!(v&0x80); if(carry!==undefined) this.c=carry; return v; }
+  fetch(){ const b=this.mem[this.pc]; this.pc=(this.pc+1)&0xFF; return b; }
+  step(){
+    if(this.halted) return;
+    this.lastPC=this.pc; this.lastWrite=null;
+    const b=this.fetch(), op=b>>4, rd=(b>>2)&3, rs=b&3; const arg=TWO.has(op)?this.fetch():null; const r=this.regs; this.cycles++;
+    switch(op){
+      case 0: this.halted=true; break;
+      case 1: r[rd]=arg; break;
+      case 2: r[rd]=this.mem[arg]; break;
+      case 3: this.mem[arg]=r[rd]; this.lastWrite=arg; break;
+      case 4: r[rd]=r[rs]; break;
+      case 5: { const t=r[rd]+r[rs]; r[rd]=this.flags(t,t>0xFF); break; }
+      case 6: r[rd]=this.flags(r[rd]-r[rs], r[rs]>r[rd]); break;
+      case 7: r[rd]=this.flags(r[rd]&r[rs]); break;
+      case 8: r[rd]=this.flags(r[rd]|r[rs]); break;
+      case 9: r[rd]=this.flags(r[rd]^r[rs]); break;
+      case 10: r[rd]= rs===0 ? this.flags(r[rd]<<1, !!(r[rd]&0x80)) : this.flags(r[rd]>>1, !!(r[rd]&1)); break;
+      case 11: this.flags(r[rd]-r[rs], r[rs]>r[rd]); break;
+      case 12: if(rd===0||(rd===1&&this.z)||(rd===2&&!this.z)||(rd===3&&this.c)) this.pc=arg; break;
+      case 13: r[rd]=this.mem[r[rs]]; break;
+      case 14: this.mem[r[rs]]=r[rd]; this.lastWrite=r[rs]; break;
+      case 15: this.output.push(r[rd]); break;
+    }
+  }
+}
+
+const PROGRAMS = {
+  'Fibonacci': `; Print Fibonacci numbers until they overflow 8 bits (> 255).
+        LDI R0, 0       ; a
+        LDI R1, 1       ; b
+loop:   OUT R0
+        MOV R2, R0
+        ADD R2, R1      ; R2 = a + b, sets carry on overflow
+        JC  done
+        MOV R0, R1
+        MOV R1, R2
+        JMP loop
+done:   OUT R1          ; last value that fit
+        HLT`,
+  'Multiply (shift-and-add)': `; Multiply two 8-bit numbers with shift-and-add, the way hardware multipliers do.
+; Result (low 8 bits) is printed and stored at 0xF0.
+        LD  R0, a       ; multiplicand
+        LD  R1, b       ; multiplier
+        LDI R2, 0       ; product
+loop:   LDI R3, 0
+        CMP R1, R3
+        JZ  done        ; multiplier used up
+        MOV R3, R1
+        SHR R3          ; carry = low bit of multiplier
+        JC  addit
+        JMP next
+addit:  ADD R2, R0      ; bit was 1: add the shifted multiplicand
+next:   SHL R0          ; multiplicand x 2
+        SHR R1          ; move to the next multiplier bit
+        JMP loop
+done:   ST  R2, 0xF0
+        OUT R2
+        HLT
+a:      .db 13
+b:      .db 11`,
+  'Sum an array (pointers)': `; Sum an array using a pointer register (LDR = load through a pointer).
+        LDI R0, data    ; pointer
+        LDI R1, 0       ; running sum
+        LDI R3, 1
+        LD  R2, count   ; items left
+loop:   LDR R2, [R0]    ; R2 = *pointer
+        ADD R1, R2
+        ADD R0, R3      ; pointer++
+        LD  R2, count
+        SUB R2, R3
+        ST  R2, count
+        JNZ loop
+        OUT R1
+        HLT
+count:  .db 5
+data:   .db 10, 20, 30, 40, 50`,
+  'Countdown': `; Count down from 10 to 1.
+        LDI R0, 10
+        LDI R1, 1
+top:    OUT R0
+        SUB R0, R1      ; sets Z when R0 hits 0
+        JNZ top
+        HLT`
+};
+
+
+
+const $=id=>document.getElementById(id);
+let cpu=null, prevRegs=[0,0,0,0], timer=null, assembled=null;
+const hex=v=>v.toString(16).toUpperCase().padStart(2,'0');
+
+Object.keys(PROGRAMS).forEach(n=>{const o=document.createElement('option');o.textContent=n;$('prog').appendChild(o);});
+$('prog').onchange=()=>{ $('src').value=PROGRAMS[$('prog').value]; build(); };
+$('src').addEventListener('input',()=>{ stop(); setMsg('Edited: press Assemble to load your changes.'); });
+
+function setMsg(t,err){ $('msg').textContent=t; $('msg').className='msg'+(err?' err':''); }
+function build(){
+  stop();
+  try{ assembled=assemble($('src').value); cpu=new CPU(assembled.bytes); prevRegs=[0,0,0,0];
+       setMsg(`Assembled ${assembled.bytes.length} bytes. Ready.`); }
+  catch(e){ cpu=null; setMsg(e.message,true); }
+  render();
+}
+function render(){
+  const regsEl=$('regs'); regsEl.innerHTML='';
+  const r=cpu?cpu.regs:[0,0,0,0];
+  r.forEach((v,i)=>{
+    const d=document.createElement('div'); d.className='reg'+(cpu&&v!==prevRegs[i]?' changed':'');
+    const bits=v.toString(2).padStart(8,'0').split('').map(b=>b==='1'?'<b>1</b>':'0').join('');
+    d.innerHTML=`<div class="name">R${i} · 0x${hex(v)}</div><div class="val">${v}</div><div class="bits">${bits}</div>`;
+    regsEl.appendChild(d);
+  });
+  $('pc').textContent=hex(cpu?cpu.pc:0); $('cyc').textContent=cpu?cpu.cycles:0;
+  [['fz','z'],['fc','c'],['fn','n']].forEach(([id,k])=>$(id).classList.toggle('on',!!(cpu&&cpu[k])));
+  $('now').textContent = !cpu ? ' ' : cpu.halted ? `Halted after ${cpu.cycles} instructions.` : `next → ${hex(cpu.pc)}: ${disasmAt(cpu.mem,cpu.pc)}`;
+  $('out').textContent = cpu&&cpu.output.length ? cpu.output.join('  ') : ' ';
+  const m=$('mem'); m.innerHTML='<div class="hd"></div>';
+  for(let c=0;c<16;c++) m.innerHTML+=`<div class="hd">${c.toString(16).toUpperCase()}</div>`;
+  const mem=cpu?cpu.mem:new Uint8Array(256); let html='';
+  const op=mem[cpu?cpu.pc:0]>>4, twoByte=[1,2,3,12].includes(op);
+  for(let a=0;a<256;a++){
+    if(a%16===0) html+=`<div class="hd">${hex(a)[0]}0</div>`;
+    let cls=mem[a]?'nz':'';
+    if(cpu&&!cpu.halted&&a===cpu.pc) cls='pc'; else if(cpu&&!cpu.halted&&twoByte&&a===((cpu.pc+1)&255)) cls='arg';
+    if(cpu&&cpu.lastWrite===a) cls='w';
+    html+=`<div class="${cls}">${hex(mem[a])}</div>`;
+  }
+  m.innerHTML+=html;
+  $('step').disabled=$('run').disabled=!cpu||cpu.halted;
+}
+function step(){ if(!cpu||cpu.halted) return; prevRegs=cpu.regs.slice(); cpu.step(); if(cpu.cycles>100000){cpu.halted=true;setMsg('Stopped: no HLT after 100,000 instructions.',true);} render(); if(cpu.halted) stop(); }
+function stop(){ clearInterval(timer); timer=null; $('run').textContent='Run'; }
+function run(){ if(timer){ stop(); return; } $('run').textContent='Pause'; const tick=()=>{ step(); if(cpu&&!cpu.halted&&timer){ clearInterval(timer); timer=setInterval(tick,1000/$('speed').value);} }; timer=setInterval(tick,1000/$('speed').value); }
+$('asm').onclick=build; $('reset').onclick=build; $('step').onclick=step; $('run').onclick=run;
+$('src').value=PROGRAMS['Fibonacci']; build();
+</script>
+</body>
+</html>
