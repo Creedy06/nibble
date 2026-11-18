@@ -3,6 +3,8 @@
 An 8-bit CPU I designed: an instruction set, an emulator that runs it, and a
 two-pass assembler that turns assembly into machine code.
 
+**[▶ Try it live in your browser](https://creedy06.github.io/nibble/)**: step through programs and watch the registers, flags and memory change.
+
 It covers the core of a computer organization course: registers, flags, memory,
 the fetch-decode-execute cycle, branching, and pointers. Instead of reading
 about a CPU, you write programs for one and watch every instruction run.
@@ -83,6 +85,7 @@ python -m pytest                                 # 17 tests
 
 ## Code layout
 
+- `docs/index.html`: the live browser demo (a JavaScript port of the same CPU and assembler, checked byte-for-byte against the Python version)
 - `nibble/isa.py`: opcode table and bit-level encode/decode
 - `nibble/assembler.py`: two-pass assembler with labels, `.db`, `.org`
 - `nibble/cpu.py`: fetch/decode/execute loop, flags, disassembler
